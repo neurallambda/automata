@@ -3,14 +3,21 @@
 A tool for generating synthetic data that results from grammars writen for various automata (eg Finite State Machines, Pushdown Automata and Turing Machines). Grammars are saved as `json`, and you can build 1000 valid strings that match this grammar with:
 
 ```sh
-automata -i my_grammar.json` -n 1000
+$ automata -i my_grammar.json` -n 1000
+aXb
+aaXbb
+aaaXbbb
+aaaaXbbbb
+...
 ```
+
+This is intended to help train the [`neurallambda`](https://github.com/neurallambda/neurallambda) project and confer reasoning ability to LLMs.
 
 ## PDA example
 
 For instance, there's a grammar that looks like `a^nXb^n`, which is any string like `aaXbb` and `aaaaaXbbbbb`, where the same number of `b`s follow the same number of `a`s (and in the middle is `X`). You cannot write a regex for this (try defining that `n`), but you can write a pushdown automata that recognizes it. A transition function involves the following mappings between states (slightly simplified, see [`rules/anbn.json`](rules/anbn.json)):
 
-```json
+```
 {
     "machine": "pda",
     "symbols": ["a", "b", "X"],
