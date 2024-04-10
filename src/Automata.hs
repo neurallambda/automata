@@ -55,7 +55,7 @@ Multi-tape, with k tapes:
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE LambdaCase #-}
 
-module Machine where
+module Automata where
 
 import Data.Sequence ( Seq, ViewL(..), (<|), Seq(..), (|>) )
 import qualified Data.Sequence as Seq

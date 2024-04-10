@@ -1,10 +1,10 @@
 {-
 
 USAGE:
-cabal run machine -- -i rules/anbn.json -g 20
+cabal run automata -- -i rules/anbn.json -g 20
 # or
 cabal build
-dist/build/machine/machine --input anbn.json --generations 20
+dist/build/automata/automata --input anbn.json --generations 20
 -}
 
 {-# LANGUAGE RecordWildCards #-}
@@ -14,14 +14,13 @@ module Main where
 import Options.Applicative
 
 import qualified Data.Sequence as Seq
-import qualified Data.Map as M
 import qualified Data.ByteString.Char8 as B8
 
-import qualified Machine as Mch
+import qualified Automata as A
 
 data CLIOptions = CLIOptions
-  { inputFile :: FilePath
-  , numGenerations :: Int
+  { inputFile :: !FilePath
+  , numGenerations :: !Int
   }
 
 cliOptions :: Parser CLIOptions
@@ -43,7 +42,7 @@ cliOptions = CLIOptions
 
 main :: IO ()
 main = do
-  options@CLIOptions{..} <- execParser $ info (cliOptions <**> helper)
+  CLIOptions{..} <- execParser $ info (cliOptions <**> helper)
     ( fullDesc
     <> progDesc "Generate sentences from a given grammar"
     <> header "grammar-generator - a sentence generator for formal grammars"
@@ -51,13 +50,13 @@ main = do
 
   -- Read transition table from input file
   jsonInput <- B8.readFile inputFile
-  case Mch.parseMachineSpec jsonInput of
+  case A.parseMachineSpec jsonInput of
     Left err -> putStrLn $ "Error parsing machine specification: " ++ err
     Right machineSpec -> do
-      let Mch.MachineSpec{..} = machineSpec
+      let A.MachineSpec{..} = machineSpec
           -- trans = M.fromList rules
-          initialState = Mch.PDAS Mch.Q0 Seq.empty
-          strings = Mch.pdaString (Mch.untransition rules) Mch.halt symbols initialState
+          initialState = A.PDAS A.Q0 Seq.empty
+          strings = A.pdaString (A.untransition rules) A.halt symbols initialState
 
       putStrLn $ "Machine: " ++ show machine
       putStrLn "generations:"

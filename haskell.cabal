@@ -1,5 +1,5 @@
 cabal-version:      3.4
-name:               neurallambda-data
+name:               automata
 
 -- The package version.
 -- See the Haskell package versioning policy (PVP) for standards
@@ -9,7 +9,7 @@ name:               neurallambda-data
 --                  | | +----- non-breaking API additions
 --                  | | | +--- code changes with no API change
 version:            0.1.0.0
-homepage:           https://github.com/neurallambda
+homepage:           https://github.com/neurallambda/automata
 license:            NONE
 author:             neurallambda
 maintainer:         neurallambda@proton.me
@@ -32,7 +32,7 @@ library
     -- Modules exported by the library.
     exposed-modules:
       Data.Map.Extra,
-      Machine
+      Automata
 
     -- Modules included in this library but not exported.
     -- other-modules:
@@ -57,7 +57,7 @@ library
     -- Base language which the package is written in.
     default-language: GHC2021
 
-executable machine
+executable automata
     -- Import common warning flags.
     import:           warnings
 
@@ -81,7 +81,7 @@ executable machine
         vector,
         text,
         optparse-applicative,
-        neurallambda-data
+        automata
 
     -- Directories containing source files.
     hs-source-dirs:   app
@@ -114,4 +114,4 @@ test-suite haskell-test
     -- Test dependencies.
     build-depends:
         base ^>=4.17.2.1,
-        neurallambda-data
+        automata
