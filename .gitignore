@@ -9,3 +9,6 @@ lib/
 
 # Haskell
 dist-newstyle/
+
+# Misc
+old/

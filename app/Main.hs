@@ -54,11 +54,6 @@ main = do
     Left err -> putStrLn $ "Error parsing machine specification: " ++ err
     Right machineSpec -> do
       let A.MachineSpec{..} = machineSpec
-          -- trans = M.fromList rules
           initialState = A.PDAS A.Q0 Seq.empty
           strings = A.pdaString (A.untransition rules) A.halt symbols initialState
-
-      putStrLn $ "Machine: " ++ show machine
-      putStrLn "generations:"
       mapM_ print (take numGenerations strings)
-      putStrLn "done."
