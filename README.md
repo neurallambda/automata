@@ -3,7 +3,7 @@
 A tool for generating synthetic data that results from grammars writen for various automata (eg Finite State Machines, Pushdown Automata and Turing Machines). Grammars are saved as `json`, and you can build 1000 valid strings that match this grammar with:
 
 ```sh
-$ automata -i my_grammar.json` -n 1000
+$ automata -i my_grammar.json -o output.json -n 1000
 aXb
 aaXbb
 aaaXbbb
