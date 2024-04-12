@@ -22,10 +22,11 @@ import Options.Applicative
 import qualified Data.ByteString.Char8 as B8
 
 import qualified Automata as A
-import Data.Aeson (ToJSON, encode, eitherDecodeStrict')
+import Data.Aeson (FromJSON(..), ToJSON(..), encode, eitherDecodeStrict', withText)
 import qualified Data.ByteString.Char8 as BC8
 import GHC.Generics (Generic)
 import Data.Text (Text)
+import PDA
 
 data CLIOptions = CLIOptions
   { inputFile :: !FilePath
@@ -59,10 +60,45 @@ cliOptions = info (options <**> helper)
         <> metavar "FILE"
         <> help "Output file to save the generated data")
 
-data Output = Output
-  { spec :: !A.MachineSpec
+
+
+data MachineType =
+  PDA
+  | TM
+  | DFA
+  deriving (Show, Eq, Generic, ToJSON)
+
+instance FromJSON MachineType where
+  parseJSON = withText "MachineType" $ \t ->
+    case t of
+      "PDA" -> return PDA
+      "pda" -> return PDA
+
+      "TM" -> return TM
+      "tm" -> return TM
+
+      "DFA" -> return DFA
+      "dfa" -> return DFA
+      _ -> fail "Invalid machine value"
+
+
+data MachineSpec m a s = MachineSpec
+  { machine :: !MachineType
+  , symbols :: ![Text]
+  , rules :: ![(L m a s, R m a s)]
+  } deriving Generic
+
+instance FromJSON (MachineSpec PDA.PDA Text (Text, Text)) where
+instance ToJSON (MachineSpec PDA.PDA Text (Text, Text)) where
+
+
+data Output m a s = Output
+  { spec :: MachineSpec m a s
   , sentences :: ![Text]
-  } deriving (Show, Generic, ToJSON)
+  } deriving Generic
+
+instance ToJSON (Output PDA.PDA Text (Text, Text)) where
+
 
 main :: IO ()
 main = do
@@ -70,12 +106,12 @@ main = do
 
   -- Read transition table from input file
   jsonInput <- B8.readFile inputFile
-  case eitherDecodeStrict' jsonInput of
+  case (eitherDecodeStrict' @(MachineSpec PDA Text (Text, Text))) jsonInput of
     Left err -> putStrLn $ "Error parsing machine specification: " ++ err
     Right machineSpec -> do
-      let spec@A.MachineSpec{..} = machineSpec
-          strings = A.pdaString (A.untransition rules) A.halt symbols A.initialState
-          out = Output spec (take numGenerations strings)
+      let spec@MachineSpec{..} = machineSpec
+          strings = take numGenerations $ PDA.pdaString rules PDA.halt symbols PDA.initialState
+          out = Output spec strings
 
       -- Save the generated data to the output file
       BC8.writeFile outputFile $ BC8.toStrict (encode out)
@@ -86,4 +122,5 @@ main = do
         else do
           putStrLn "examples:"
           mapM_ print (take 10 strings)
+          putStrLn $ "... " <> show (length strings) <> " total programs"
           putStrLn "done."
