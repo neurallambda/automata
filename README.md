@@ -13,9 +13,18 @@ aaaaXbbbb
 
 This is intended to help train the [`neurallambda`](https://github.com/neurallambda/neurallambda) project and confer reasoning ability to LLMs.
 
+## Layout
+
+```sh
+rules/  # example grammars
+data/   # data generated from those rules
+app/    # the CLI tool
+src/    # the supporting library
+```
+
 ## PDA example
 
-For instance, there's a grammar that looks like `a^nXb^n`, which is any string like `aaXbb` and `aaaaaXbbbbb`, where the same number of `b`s follow the same number of `a`s (and in the middle is `X`). You cannot write a regex for this (try defining that `n`), but you can write a pushdown automata that recognizes it. A transition function involves the following mappings between states (slightly simplified, see [`rules/anbn.json`](rules/anbn.json)):
+There's a grammar that looks like `a^nXb^n`, which is any string like `aaXbb` and `aaaaaXbbbbb`, where the same number of `b`s follow the same number of `a`s (and in the middle is `X`). You cannot write a regex for this (try defining that `n`), but you can write a pushdown automata that recognizes it. A transition function involves the following mappings between states (slightly simplified, see [`rules/anbn.json`](rules/anbn.json)):
 
 ```
 {
