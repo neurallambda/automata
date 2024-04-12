@@ -19,16 +19,16 @@ For instance, there's a grammar that looks like `a^nXb^n`, which is any string l
 
 ```
 {
-    "machine": "pda",
+    "machine": "PDA",
     "symbols": ["a", "b", "X"],
     "rules": [
-        # input symbol
-          |  # current state          # resulting state
-          |    |   # top of stack       |    # stack operation
-          |    |     |                  |      |
-        ["a", "Q1", "A",               "Q1", ["push", "A"]],
-        ["X", "Q1", "A",               "Q2", "nullop"],
-        ["b", "Q2", "A",               "Q2", "pop"],
+         # input symbol
+           |  # current state         # resulting state
+           |    |  # top of stack     |    # stack operation
+           |    |          |          |      |
+        [["a", "INITIAL", "A"],     ["Q1", ["push", "A"]]],
+        [["X", "Q1", "A"],          ["Q2", "nullop"]],
+        [["b", "Q2", "A"],          ["Q2", "pop"]],
     ]
 }
 ```

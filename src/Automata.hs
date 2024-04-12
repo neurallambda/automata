@@ -2,6 +2,16 @@
 
 Generate sentences in given grammars.
 
+PDA Special Symbols
+
+Left of relation:
+ANY to match any {symbol, state, stack}
+
+State:
+INITIAL
+ACCEPT
+REJECT
+
 
 ----------
 NOTES:
@@ -49,31 +59,25 @@ Multi-tape, with k tapes:
 
 -}
 
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE OverloadedLists #-}
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE DeriveAnyClass #-}
 
 module Automata where
 
 import Data.Sequence ( Seq, ViewL(..), (<|), Seq(..), (|>) )
 import qualified Data.Sequence as Seq
 import Data.Foldable ( toList, foldl' )
-import Data.List (intercalate)
 import qualified Data.Map as M
 import Data.Kind (Type)
 import Data.Map.Extra (lookupMatchAny, Any(..), MatchAny(..))
 import Data.Maybe (mapMaybe)
 import Data.Aeson
-import Data.ByteString (ByteString)
 import Data.Aeson.Types (Parser)
-import Data.Text (unpack)
 import qualified Data.Vector as Vector
 import qualified Data.Text as T
-import qualified Data.ByteString as B
-import qualified Data.ByteString.Char8 as B8
-import Data.Either (fromRight)
+import GHC.Generics (Generic)
 
 generateLs :: forall m a s. (Machine m a s, Ord (L m a s), MatchAny (L m a s))
   => [(L m a s, R m a s)] -- transition relation
@@ -81,7 +85,7 @@ generateLs :: forall m a s. (Machine m a s, Ord (L m a s), MatchAny (L m a s))
   -> [a] -- input symbols
   -> S m a s -- initial state
   -> [[L m a s]] -- lazy list of valid prefixes
-generateLs transitions halt syms initialState = bfs [(initialState, Empty)]
+generateLs transitions hlt syms initState = bfs [(initState, Empty)]
   where
     bfs :: [(S m a s, Seq (L m a s))] -> [[L m a s]]
     bfs [] = []
@@ -94,22 +98,19 @@ generateLs transitions halt syms initialState = bfs [(initialState, Empty)]
           -- add new states and their accumulators to the queue
           newQueue = queue ++ validTransitions
           -- check if the current state is a halting state
-          haltingAccs = [toList acc | halt state]
+          haltingAccs = [toList acc | hlt state]
         in
           haltingAccs ++ bfs newQueue
 
-pdaString :: (Eq a
-             , Ord a
-             , Ord st
-             , Ord sk
-             , Show a, Show st, Show sk
-             )
-  => [(L PDA a (st, sk), R PDA a (st, sk))]
-  -> (S PDA a (st, sk) -> Bool) -- halting states
-  -> [a] -- input symbols (to possibly stand in for Any)
-  -> S PDA a (st, sk) -- initial state
-  -> [[a]]
-pdaString transitions haltStates syms initialState = mapMaybe (mapM f) (generateLs transitions haltStates syms initialState)
+pdaString ::
+  [(L PDA Symbol (State, Stack), R PDA Symbol (State, Stack))]
+  -> (S PDA Symbol (State, Stack) -> Bool) -- halting states
+  -> [Symbol] -- input symbols (to possibly stand in for Any)
+  -> S PDA Symbol (State, Stack) -- initial state
+  -> [T.Text]
+pdaString transitions haltStates syms initState =
+  map T.concat
+    $ mapMaybe (mapM f) (generateLs transitions haltStates syms initState)
   where
     f (PDAL (A a) _ _) = Just a
     f (PDAL Any _ _) = Nothing
@@ -171,7 +172,7 @@ runMachine :: (Machine m a s
   -> S m a s -- initial state
   -> [a] -- input symbols
   -> Maybe (R m a s, S m a s)
-runMachine table initialState = foldl' f $ Just (error "empty input", initialState)
+runMachine table initState = foldl' f $ Just (error "empty input", initState)
   where
     f (Just (_, state)) = runStep table state
     f Nothing = const Nothing
@@ -182,9 +183,33 @@ runMachine table initialState = foldl' f $ Just (error "empty input", initialSta
 
 data PDA
 
-data PDAOp stack = NullOp | Push !stack | Pop deriving (Eq, Ord, Show)
+data PDAOp stack =
+  NullOp
+  | Push !stack
+  | Pop
+  deriving (Eq, Ord, Show)
 
---instance Machine PDA a (state, stack) where
+instance FromJSON stack => FromJSON (PDAOp stack) where
+  parseJSON (String "pop") = return Pop
+  parseJSON (String "nullop") = return NullOp
+  parseJSON (Array arr) = do
+    op <- parseJSON (arr Vector.! 0)
+    case op of
+      "push" -> do
+        stack <- parseJSON (arr Vector.! 1)
+        return (Push stack)
+      _ -> fail $ "Invalid PDAOp operation: " ++ T.unpack op
+  parseJSON invalid = fail $ "Invalid PDAOp JSON: " ++ show invalid
+
+instance ToJSON stack => ToJSON (PDAOp stack) where
+  toJSON NullOp = String "nullop"
+  toJSON Pop = String "pop"
+  toJSON (Push stack) = Array $ Vector.fromList [String "push", toJSON stack]
+
+
+----------
+--
+
 instance Machine PDA a (state, stack) where
   data L PDA a (state, stack) = PDAL (Any a) (Any state) (Maybe (Any stack)) deriving (Show, Ord, Eq)
   data R PDA a (state, stack) = PDAR state (PDAOp stack) deriving (Show, Ord, Eq)
@@ -203,80 +228,90 @@ instance (Eq state, Eq stack, Eq a) => MatchAny (L PDA a (state, stack)) where
 ----------
 -- * JSON
 
-newtype Transition = Transition (L PDA Char (Q, Char), R PDA Char (Q, Char))
-  deriving (Show, Eq)
+parseAt :: FromJSON a => Vector.Vector Value -> Int -> Parser a
+parseAt arr i = parseJSON (arr Vector.! i)
 
-instance FromJSON Transition where
-  parseJSON = withArray "Transition" $ \arr -> do
-    input <- arr `parseAt` 0
-    fromState <- arr `parseAt` 1
-    stackTop <- arr `parseAt` 2
-    toState <- arr `parseAt` 3
-    action <- arr `parseAt` 4
+instance (FromJSON a, FromJSON state, FromJSON stack) => FromJSON (L PDA a (state, stack)) where
+  parseJSON = withArray "(L PDA a (state, stack))" $ \arr -> do
+    PDAL
+      <$> (arr `parseAt` 0) -- input
+      <*> (arr `parseAt` 1) -- fromState
+      <*> (arr `parseAt` 2) -- stackTop
 
-    l <- PDAL <$> parseInput input <*> pure (A fromState) <*> parseMaybeAny stackTop
-    r <- PDAR toState <$> parseAction action
+instance (ToJSON a, ToJSON state, ToJSON stack) => ToJSON (L PDA a (state, stack)) where
+  toJSON (PDAL input fromState stackTop) = Array $ Vector.fromList
+    [ toJSON input
+    , toJSON fromState
+    , toJSON stackTop
+    ]
 
-    return (Transition (l, r))
+instance (FromJSON state, FromJSON stack) => FromJSON (R PDA a (state, stack)) where
+  parseJSON = withArray "(R PDA a (state, stack))" $ \arr -> do
+    PDAR
+      <$> (arr `parseAt` 0) -- toState
+      <*> (arr `parseAt` 1) -- action
 
-    where
-      parseAt arr i = parseJSON (arr Vector.! i)
+instance (ToJSON state, ToJSON stack) => ToJSON (R PDA a (state, stack)) where
+  toJSON (PDAR toState action) = Array $ Vector.fromList
+    [ toJSON toState
+    , toJSON action
+    ]
 
-      parseInput :: Value -> Parser (Any Char)
-      parseInput (String "^") = return (A '^')
-      parseInput (String "$") = return (A '$')
-      parseInput (String [c]) = return (A c)
-      parseInput other = fail $ "Invalid input: " ++ show other
+newtype Transition = Transition (L PDA Symbol (State, Stack), R PDA Symbol (State, Stack))
+  deriving (Show, Eq, Generic, ToJSON, FromJSON)
 
-      parseMaybeAny :: Value -> Parser (Maybe (Any Char))
-      parseMaybeAny Null = return Nothing
-      parseMaybeAny v = do
-        c <- parseChar v
-        return (Just c)
+-- instance FromJSON Transition where
+--   -- parseJSON = withArray "Transition" $ \arr -> do
+--   --   l <- arr `parseAt` 0
+--   --   r <- arr `parseAt` 1
+--   --   return (Transition (l, r))
 
-      parseChar :: Value -> Parser (Any Char)
-      parseChar = withText "Char" $ \t ->
-        case T.unpack t of
-          [c] -> return (A c)
-          other -> fail $ "Invalid character: " ++ other
+-- instance ToJSON Transition where
+--   -- toJSON (Transition (PDAL inp state1 stack1, PDAR state2 stack2)) = Array $ Vector.fromList
+--   --   [ toJSON inp
+--   --   , toJSON state1
+--   --   , toJSON stack1
+--   --   , toJSON state2
+--   --   , toJSON stack2
+--   --   ]
 
-parseAction :: Value -> Parser (PDAOp Char)
+parseAction :: Value -> Parser (PDAOp Stack)
 parseAction (String "nullop") = return NullOp
 parseAction (String "pop") = return Pop
 parseAction v = pushParser v
   where
+    pushParser :: Value -> Parser (PDAOp Stack)
     pushParser = withArray "Push" $ \arr -> do
       op <- arr `parseAt` 0
       case op of
-        String "push" -> do
-          symbol <- arr `parseAt` 1
-          case unpack symbol of
-            [c] -> return $ Push c
-            other -> fail $ "Invalid push symbol: " ++ other
+        String "push" -> Push <$> arr `parseAt` 1
         _ -> fail "Invalid push action"
 
-    parseAt arr i = parseJSON (arr Vector.! i)
-
-parseTransitions :: ByteString -> Either String [Transition]
-parseTransitions = eitherDecodeStrict'
-
-data MachineType = PDA | TM | DFA
-  deriving (Show, Eq)
+data MachineType =
+  PDA
+  | TM
+  | DFA
+  deriving (Show, Eq, Generic, ToJSON)
 
 instance FromJSON MachineType where
   parseJSON = withText "MachineType" $ \t ->
     case t of
+      "PDA" -> return PDA
       "pda" -> return PDA
+
+      "TM" -> return TM
       "tm" -> return TM
+
+      "DFA" -> return DFA
       "dfa" -> return DFA
       _ -> fail "Invalid machine value"
 
 data MachineSpec = MachineSpec
   { machine :: !MachineType
-  , symbols :: ![Char]
+  , symbols :: ![Symbol]
   , rules :: ![Transition]
   }
-  deriving (Show, Eq)
+  deriving (Show, Eq, Generic, ToJSON)
 
 instance FromJSON MachineSpec where
   parseJSON = withObject "MachineSpec" $ \obj -> do
@@ -286,105 +321,22 @@ instance FromJSON MachineSpec where
     transitions <- mapM parseJSON rules
     return (MachineSpec machine symbols transitions)
     where
+      parseSymbols :: Value -> Parser [Symbol]
       parseSymbols = withArray "symbols" $ \arr ->
-        mapM parseSymbol (toList arr)
+        mapM parseJSON (toList arr)
 
-      parseSymbol = withText "Symbol" $ \t ->
-        case T.unpack t of
-          [c] -> return c
-          _ -> fail "Invalid symbol"
+type State = T.Text
+type Stack = T.Text
+type Symbol = T.Text
 
--- instance FromJSON MachineSpec where
---   parseJSON = withObject "MachineSpec" $ \obj -> do
---     machine <- obj .: "machine"
---     rules <- obj .: "rules"
---     symbols <- obj .: "symbols"
---     transitions <- mapM parseJSON rules
---     return (MachineSpec machine symbols transitions)
-
-parseMachineSpec :: ByteString -> Either String MachineSpec
-parseMachineSpec = eitherDecodeStrict'
-
--- exStr =
--- [
---   ["^", "Q0", null, "Q1", ["push", "$"]],
---   ["$", "Q1", "$", "QAccept", "pop"],
---   ["a", "Q1", "$", "Q1", ["push", "A"]],
---   ["a", "Q1", "A", "Q1", ["push", "A"]],
---   ["A", "Q1", "A", "Q1", ["push", "A"]],
---   ["x", "Q1", "A", "Q2", "nullop"],
---   ["b", "Q1", "A", "Q2", "pop"],
---   ["b", "Q2", "A", "Q2", "pop"],
---   ["$", "Q2", "$", "QAccept", "pop"]
--- ]
-
-
-transitionTable :: String
-transitionTable = unlines
-  [ "["
-  , "  [\"^\", \"Q0\", null, \"Q1\", [\"push\", \"$\"]],"
-  , "  [\"$\", \"Q1\", \"$\", \"QAccept\", \"pop\"],"
-  , "  [\"a\", \"Q1\", \"$\", \"Q1\", [\"push\", \"A\"]],"
-  , "  [\"a\", \"Q1\", \"A\", \"Q1\", [\"push\", \"A\"]],"
-  , "  [\"A\", \"Q1\", \"A\", \"Q1\", [\"push\", \"A\"]],"
-  , "  [\"x\", \"Q1\", \"A\", \"Q2\", \"nullop\"],"
-  , "  [\"b\", \"Q1\", \"A\", \"Q2\", \"pop\"],"
-  , "  [\"b\", \"Q2\", \"A\", \"Q2\", \"pop\"],"
-  , "  [\"$\", \"Q2\", \"$\", \"QAccept\", \"pop\"]"
-  , "]"
-  ]
-
-untransition :: Functor f => f Transition -> f (L PDA Char (Q, Char), R PDA Char (Q, Char))
+untransition :: Functor f => f Transition -> f (L PDA Symbol (State, Stack), R PDA Symbol (State, Stack))
 untransition xs = f <$> xs
   where f (Transition x) = x
 
--- anbnTransitions = unTransition <$> right
---   where
---     unTransition (Transition x) = x
---     Right right =  parseTransitions $ B8.pack transitionTable
+initialState :: S PDA Symbol (State, Stack)
+initialState = PDAS "INITIAL" Seq.empty
 
-
-instance FromJSON Q where
-  parseJSON = withText "Q" $ \t ->
-    case t of
-      "Q0" -> return Q0
-      "Q1" -> return Q1
-      "Q2" -> return Q2
-      "Q3" -> return Q3
-      "Q4" -> return Q4
-      "QAccept" -> return QAccept
-      "QReject" -> return QReject
-      _ -> fail "Invalid Q value"
-
-
-----------
--- * Example
-
-data Q =
-  Q0
-  | Q1
-  | Q2
-  | Q3
-  | Q4
-  | QAccept
-  | QReject
-  deriving (Eq, Show, Ord, Read)
-
-instance MatchAny Q where matchAny x y = x == y
-
-
-----------
--- * Go
-
-showSeq :: Show a => Data.Sequence.Seq a -> String
-showSeq xs = "{" ++ intercalate ", " (show <$> toList xs) ++ "}"
-
-formatPDAResult :: Maybe (R PDA Char (Q, Char), S PDA Char (Q, Char)) -> String
-formatPDAResult Nothing = "no transition found, and didn't reach halting state"
-formatPDAResult (Just (_, PDAS finalState stack)) =
-  "Final state: " ++ show finalState ++ " | Stack: " ++ showSeq stack
-
-halt :: S PDA a (Q, stack) -> Bool
-halt (PDAS QReject _) = True
-halt (PDAS QAccept _) = True
+halt :: S PDA a (State, stack) -> Bool
+halt (PDAS "REJECT" _) = True
+halt (PDAS "ACCEPT" _) = True
 halt _ = False

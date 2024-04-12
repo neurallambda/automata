@@ -1,17 +1,26 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Data.Map.Extra where
 
 import qualified Data.Map as Map
-import Data.Foldable (toList)
+import Data.Aeson (Value(..), FromJSON, parseJSON, ToJSON (..))
 
 --------------------------------------------------
--- * MatchAny
+-- * MatchAny: a helper class to allow searching `Map`s with wildcards
 
 -- | A "wildcard" match, useful for doing lookups in 'Map's where the key might
 -- contain `Any a`.
 data Any a = A !a | Any
   deriving (Eq, Ord, Show)
+
+instance (FromJSON a) => FromJSON (Any a) where
+  parseJSON (String "ANY") = pure Any
+  parseJSON x = A <$> parseJSON x
+
+instance (ToJSON a) => ToJSON (Any a) where
+  toJSON Any = String "ANY"
+  toJSON (A x) = toJSON x
 
 -- | Search a 'Map' where elements in the @k@'s structure can have wildcard
 -- values
@@ -40,6 +49,3 @@ instance (MatchAny a) => MatchAny (Maybe a) where
     matchAny (Just a) (Just b) = matchAny a b
     matchAny Nothing Nothing = True
     matchAny _ _ = False
-
--- instance {-# OVERLAPPABLE #-} (Foldable t, MatchAny a) => MatchAny (t a) where
---     matchAny t1 t2 = and $ zipWith matchAny (toList t1) (toList t2)
