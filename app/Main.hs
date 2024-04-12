@@ -5,7 +5,7 @@ USAGE:
 cabal run automata -- --input rules/anbn.json --output data/anbn_progs.json --number 100
 cabal run automata -- --input rules/wcwr.json --output data/wcwr_progs.json --number 100
 cabal run automata -- --input rules/an_bm_cnm.json --output data/an_bm_cnm_progs.json --number 100
-cabal run automata -- --input rules/an_b2n.json --output data/an_b2n_progs.json --number 100
+cabal run automata -- --input rules/abcde.json --output data/abcde_progs.json --number 10
 
 # or
 
@@ -63,25 +63,24 @@ cliOptions = info (options <**> helper)
         <> metavar "FILE"
         <> help "Output file to save the generated data")
 
-
-
 data MachineType =
-  PDA
+  FSM
+  | PDA
   | TM
-  | DFA
   deriving (Show, Eq, Generic, ToJSON)
 
 instance FromJSON MachineType where
   parseJSON = withText "MachineType" $ \t ->
     case t of
+      "FSM" -> return FSM
+      "fsm" -> return FSM
+
       "PDA" -> return PDA
       "pda" -> return PDA
 
       "TM" -> return TM
       "tm" -> return TM
 
-      "DFA" -> return DFA
-      "dfa" -> return DFA
       _ -> fail "Invalid machine value"
 
 
