@@ -2,7 +2,10 @@
 
 USAGE:
 
-cabal run automata -- --input rules/anbn.json --output anbn_progs.json --number 1000
+cabal run automata -- --input rules/anbn.json --output data/anbn_progs.json --number 100
+cabal run automata -- --input rules/wcwr.json --output data/wcwr_progs.json --number 100
+cabal run automata -- --input rules/an_bm_cnm.json --output data/an_bm_cnm_progs.json --number 100
+cabal run automata -- --input rules/an_b2n.json --output data/an_b2n_progs.json --number 100
 
 # or
 
@@ -113,14 +116,13 @@ main = do
           strings = take numGenerations $ PDA.pdaString rules PDA.halt symbols PDA.initialState
           out = Output spec strings
 
-      -- Save the generated data to the output file
-      BC8.writeFile outputFile $ BC8.toStrict (encode out)
-      putStrLn $ "Generated data saved to: " ++ outputFile
+      -- Save the generated data
       if null strings
         then
           putStrLn "WARNING: No programs generated, perhaps you have an error in your transition rules?"
         else do
-          putStrLn "examples:"
+          BC8.writeFile outputFile $ BC8.toStrict (encode out)
+          putStrLn "sample:"
           mapM_ print (take 10 strings)
           putStrLn $ "... " <> show (length strings) <> " total programs"
-          putStrLn "done."
+          putStrLn $ "saved to: " ++ outputFile

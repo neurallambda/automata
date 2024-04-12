@@ -1,0 +1,19 @@
+{
+    "machine": "PDA",
+    "description": "PDA recognizable grammar `wcw^R`, where `w` is a string of a's and b's, and ^R means the reverse of that string.",
+    "symbols": ["^", "a", "b", "c", "$"],
+    "rules": [
+        [["^", "INITIAL", null], ["Q1", ["push", "$"]]],
+        [["a", "Q1", "$"], ["Q1", ["push", "a"]]],
+        [["b", "Q1", "$"], ["Q1", ["push", "b"]]],
+        [["a", "Q1", "a"], ["Q1", ["push", "a"]]],
+        [["a", "Q1", "b"], ["Q1", ["push", "a"]]],
+        [["b", "Q1", "a"], ["Q1", ["push", "b"]]],
+        [["b", "Q1", "b"], ["Q1", ["push", "b"]]],
+        [["c", "Q1", "a"], ["Q2", "nullop"]],
+        [["c", "Q1", "b"], ["Q2", "nullop"]],
+        [["a", "Q2", "a"], ["Q2", "pop"]],
+        [["b", "Q2", "b"], ["Q2", "pop"]],
+        [["$", "Q2", "$"], ["ACCEPT", "pop"]]
+    ]
+}

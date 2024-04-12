@@ -1,0 +1,14 @@
+{
+  "machine": "PDA",
+    "description": "PDA recognizable grammar `a^nb^(2n)`. Demonstrates empty strings to offer something like 'dynamic time' computation - when an 'a' is seen, it needs to push twice.",
+  "symbols": ["^", "a", "b", "x", "y", "$", ""],
+  "rules": [
+    [["^", "INITIAL", null], ["Q1", ["push", "$"]]],
+    [["$", "Q3", "$"], ["ACCEPT", "pop"]],
+    [["a", "Q1", "$"], ["Q2", ["push", "X"]]],
+    [["a", "Q1", "X"], ["Q2", ["push", "X"]]],
+    [["", "Q2", "X"], ["Q1", ["push", "X"]]],
+    [["b", "Q1", "X"], ["Q3", "pop"]],
+    [["b", "Q3", "X"], ["Q3", "pop"]]
+  ]
+}
