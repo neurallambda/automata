@@ -125,43 +125,43 @@ generateLsBFS transitions hlt syms initState = bfs [(initState, Empty)]
         in
           haltingAccs ++ bfs newQueue
 
--- | Generate valid strings (Iterated Depth DFS)
+-- | Generate valid strings (Iterative Depth DFS).
+--
+-- If no strings have been found for a span of `maxDeepening`, stop generating
+-- early (ie don't search ad infinitum)
 generateLsIDDFS :: forall m a s. (Machine m a s, Ord (L m a s), MatchAny (L m a s))
-  => [(L m a s, R m a s)] -- transition relation
+  => Int -- maximum string length
+  -> Int -- maximum deepening steps without finding new strings
+  -> [(L m a s, R m a s)] -- transition relation
   -> (S m a s -> Bool) -- halting function
   -> [a] -- input symbols
   -> S m a s -- initial state
   -> [[L m a s]] -- lazy list of valid strings up to the specified depth
-generateLsIDDFS transitions hlt syms initState = idfs [(initState, Empty)] 1
+generateLsIDDFS maxLength maxDeepening transitions hlt syms initState = idfs [(initState, Empty, 0)] 0
   where
-    idfs :: [(S m a s, Seq (L m a s))] -> Int -> [[L m a s]]
-    idfs queue depth =
+    idfs :: [(S m a s, Seq (L m a s), Int)] -> Int -> [[L m a s]]
+    idfs queue deepeningSteps
+      | deepeningSteps > maxDeepening = []
+      | otherwise =
         let (haltingAccs, nonHaltingStates) = partitionHalting queue
-            newQueue = concatMap exploreStates nonHaltingStates
-        in haltingAccs ++ idfs newQueue (depth + 1)
+            newQueue = concatMap exploreStates $ filter (\(_, _, len) -> len <= maxLength) nonHaltingStates
+            validStrings = map (\(acc, _) -> toList acc) haltingAccs
+            deepeningSteps' = if null validStrings then deepeningSteps + 1 else 0
+        in validStrings ++ idfs newQueue deepeningSteps'
 
-    partitionHalting :: [(S m a s, Seq (L m a s))] -> ([[L m a s]], [(S m a s, Seq (L m a s))])
+    partitionHalting :: [(S m a s, Seq (L m a s), Int)] -> ([(Seq (L m a s), Int)], [(S m a s, Seq (L m a s), Int)])
     partitionHalting = foldr f ([], [])
       where
-        f (state, acc) (halting, nonHalting)
-          | hlt state = (toList acc : halting, nonHalting)
-          | otherwise = (halting, (state, acc) : nonHalting)
+        f (state, acc, len) (halting, nonHalting)
+          | hlt state = ((acc, len) : halting, nonHalting)
+          | otherwise = (halting, (state, acc, len) : nonHalting)
 
-    exploreStates :: (S m a s, Seq (L m a s)) -> [(S m a s, Seq (L m a s))]
-    exploreStates (state, acc) = concatMap explore syms
+    exploreStates :: (S m a s, Seq (L m a s), Int) -> [(S m a s, Seq (L m a s), Int)]
+    exploreStates (state, acc, len) = concatMap explore syms
       where
         explore a =
           let ls = filter (\(l, _) -> matchAny l (mkL a state)) transitions
-          in map (\(l, r) -> (action r state, acc |> l)) ls
-
--- | Pick which strategy you ant.
-generateLs :: forall m a s. (Machine m a s, Ord (L m a s), MatchAny (L m a s))
-  => [(L m a s, R m a s)] -- transition relation
-  -> (S m a s -> Bool) -- halting function
-  -> [a] -- input symbols
-  -> S m a s -- initial state
-  -> [[L m a s]] -- lazy list of valid strings up to the specified depth
-generateLs = generateLsIDDFS
+          in map (\(l, r) -> (action r state, acc |> l, len + 1)) ls
 
 class
   (ToJSON (L m a s),

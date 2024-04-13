@@ -30,7 +30,7 @@ Pushdown Automaton (PDA): 7-tuple (Q, Σ, Γ, δ, q₀, Z₀, F), where:
 
 module PDA where
 
-import Automata (generateLs, Machine(..), viewl)
+import Automata (generateLsIDDFS, Machine(..), viewl)
 import Data.Sequence ( Seq, (<|), Seq(..) )
 import qualified Data.Sequence as Seq
 import Data.Map.Extra (Any(..), MatchAny(..))
@@ -41,14 +41,16 @@ import qualified Data.Vector as Vector
 import qualified Data.Text as T
 
 pdaString ::
-  [(L PDA Symbol (State, Stack), R PDA Symbol (State, Stack))]
+  Int  -- max string length
+  -> Int -- max steps to deepen before giving up
+  -> [(L PDA Symbol (State, Stack), R PDA Symbol (State, Stack))]
   -> (S PDA Symbol (State, Stack) -> Bool) -- halting states
   -> [Symbol] -- input symbols (to possibly stand in for Any)
   -> S PDA Symbol (State, Stack) -- initial state
   -> [T.Text]
-pdaString transitions haltStates syms initState =
+pdaString maxLen maxDeepening transitions haltStates syms initState =
   map T.concat
-    $ mapMaybe (mapM f) (generateLs transitions haltStates syms initState)
+    $ mapMaybe (mapM f) (generateLsIDDFS maxLen maxDeepening transitions haltStates syms initState)
   where
     f (PDAL (A a) _ _) = Just a
     f (PDAL Any _ _) = Nothing

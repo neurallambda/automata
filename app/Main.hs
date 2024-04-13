@@ -2,16 +2,12 @@
 
 USAGE:
 
-cabal run automata -- --input rules/anbn.json --output data/anbn_progs.json --number 100
-cabal run automata -- --input rules/wcwr.json --output data/wcwr_progs.json --number 100
-cabal run automata -- --input rules/an_b2n.json --output data/an_b2n_progs.json --number 100
-cabal run automata -- --input rules/an_bm_cnm.json --output data/an_bm_cnm_progs.json --number 100
-cabal run automata -- --input rules/abcde.json --output data/abcde_progs.json --number 10
+cabal run automata -- --input rules/anbn.json --output data/anbn_progs.json --number 100 --max_string_length 100
 
 # or
 
 cabal build
-dist/build/automata/automata --input rules/anbn.json --output anbn_progs.json --number 1000
+dist/build/automata/automata --input rules/anbn.json --output anbn_progs.json --number 1000 --max_string_length 100
 
 -}
 
@@ -35,6 +31,8 @@ data CLIOptions = CLIOptions
   { inputFile :: !FilePath
   , numGenerations :: !Int
   , outputFile :: !FilePath
+  , maxStringLength :: !Int
+  , maxDeepening :: !Int
   }
 
 cliOptions :: ParserInfo CLIOptions
@@ -62,6 +60,20 @@ cliOptions = info (options <**> helper)
         <> short 'o'
         <> metavar "FILE"
         <> help "Output file to save the generated data")
+      <*> option auto
+        ( long "max_length"
+        <> short 'l'
+        <> metavar "INT"
+        <> value 20
+        <> showDefault
+        <> help "Max string length.")
+      <*> option auto
+        ( long "max_deepening"
+        <> short 'd'
+        <> metavar "INT"
+        <> value 20
+        <> showDefault
+        <> help "Max number of depths to explore if no new strings have been yielded for this span.")
 
 data MachineType =
   FSM
@@ -112,7 +124,7 @@ main = do
     Left err -> putStrLn $ "Error parsing machine specification: " ++ err
     Right machineSpec -> do
       let spec@MachineSpec{..} = machineSpec
-          strings = take numGenerations $ PDA.pdaString rules PDA.halt symbols PDA.initialState
+          strings = take numGenerations $ PDA.pdaString maxStringLength maxDeepening rules PDA.halt symbols PDA.initialState
           out = Output spec strings
 
       -- Save the generated data
@@ -122,6 +134,10 @@ main = do
         else do
           BC8.writeFile outputFile $ BC8.toStrict (encode out)
           putStrLn "sample:"
-          mapM_ print (take 10 strings)
-          putStrLn $ "... " <> show (length strings) <> " total programs"
+          let hd = take 5 strings
+              tl = drop (length strings - 5) strings
+          mapM_ print hd
+          putStrLn "..."
+          mapM_ print tl
+          putStrLn $ "generated " <> show (length strings) <> " total programs"
           putStrLn $ "saved to: " ++ outputFile
