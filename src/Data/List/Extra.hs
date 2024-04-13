@@ -1,15 +1,15 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Data.Map.Extra where
+module Data.List.Extra where
 
-import qualified Data.Map as Map
 import Data.Aeson (Value(..), FromJSON, parseJSON, ToJSON (..))
+import Data.List (foldl')
 
 --------------------------------------------------
--- * MatchAny: a helper class to allow searching `Map`s with wildcards
+-- * MatchAny: a helper class to allow searching lists with wildcards
 
--- | A "wildcard" match, useful for doing lookups in 'Map's where the key might
+-- | A "wildcard" match, useful for doing lookups in lists where the element might
 -- contain `Any a`.
 data Any a = A !a | Any
   deriving (Eq, Ord, Show)
@@ -22,14 +22,14 @@ instance (ToJSON a) => ToJSON (Any a) where
   toJSON Any = String "ANY"
   toJSON (A x) = toJSON x
 
--- | Search a 'Map' where elements in the @k@'s structure can have wildcard
--- values
-lookupMatchAny :: MatchAny k => k -> Map.Map k v -> Maybe v
-lookupMatchAny key = Map.foldrWithKey go Nothing
+-- | Search a list where elements can have wildcard values and stop after the first match
+lookupMatchAny :: MatchAny a => a -> [a] -> Maybe a
+lookupMatchAny key xs = foldl' go (const Nothing) xs key
   where
-    go k v acc
-      | matchAny key k = Just v
-      | otherwise = acc
+    -- fold w continuation allows early return
+    go cont x k
+      | matchAny k x = Just x
+      | otherwise = cont k
 
 class MatchAny a where
     matchAny :: a -> a -> Bool

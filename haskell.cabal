@@ -42,7 +42,7 @@ executable automata
 library
     import:           warnings
     exposed-modules:
-      Data.Map.Extra,
+      Data.List.Extra,
       Automata,
       PDA
 

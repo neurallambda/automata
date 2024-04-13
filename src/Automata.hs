@@ -47,12 +47,12 @@ module Automata where
 import Data.Sequence ( Seq, ViewL(..), Seq(..), (|>) )
 import qualified Data.Sequence as Seq
 import Data.Foldable ( toList, foldl' )
-import qualified Data.Map as M
 import Data.Kind (Type)
-import Data.Map.Extra (lookupMatchAny, MatchAny(..))
+import Data.List.Extra (lookupMatchAny, MatchAny(..), Any (..))
 import Data.Aeson
 import Data.Aeson.Types (Parser)
 import qualified Data.Vector as Vector
+import Control.Arrow (second)
 
 
 --------------------------------------------------
@@ -178,23 +178,24 @@ class
   mkL :: a -> S m a s -> L m a s
 
 -- | Run a machine on an input symbol
-runStep :: (Machine m a s, Ord (L m a s), Show (L m a s), MatchAny (L m a s))
-  => M.Map (L m a s) (R m a s) -- transition table
+runStep :: (Machine m a s, Eq (L m a s), Show (L m a s), MatchAny (L m a s), Eq (R m a s))
+  => [(L m a s, R m a s)] -- transition table
   -> S m a s -- state
   -> a -- single input
   -> Maybe (R m a s, S m a s) -- (transition value, new state)
 runStep table st input =
-  case lookupMatchAny (mkL input st) table of
-    Just transition -> Just (transition, action transition st)
-    Nothing -> Nothing -- no transition found
+  case lookupMatchAny (mkL input st, Any) (second A <$> table) of
+    Just (_, A transition) -> Just (transition, action transition st)
+    _ -> Nothing -- no transition found
 
 -- | Run a machine on a list of input symbols
 runMachine :: (Machine m a s
-              , Ord (L m a s)
+              , Eq (L m a s)
+              , Eq (R m a s)
               , Show (L m a s)
               , MatchAny (L m a s)
               )
-  => M.Map (L m a s) (R m a s) -- transition table
+  => [(L m a s, R m a s)] -- transition table
   -> S m a s -- initial state
   -> [a] -- input symbols
   -> Maybe (R m a s, S m a s)
