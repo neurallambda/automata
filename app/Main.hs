@@ -4,6 +4,7 @@ USAGE:
 
 cabal run automata -- --input rules/anbn.json --output data/anbn_progs.json --number 100
 cabal run automata -- --input rules/wcwr.json --output data/wcwr_progs.json --number 100
+cabal run automata -- --input rules/an_b2n.json --output data/an_b2n_progs.json --number 100
 cabal run automata -- --input rules/an_bm_cnm.json --output data/an_bm_cnm_progs.json --number 100
 cabal run automata -- --input rules/abcde.json --output data/abcde_progs.json --number 10
 
@@ -24,7 +25,6 @@ import Options.Applicative
 
 import qualified Data.ByteString.Char8 as B8
 
-import qualified Automata as A
 import Data.Aeson (FromJSON(..), ToJSON(..), encode, eitherDecodeStrict', withText)
 import qualified Data.ByteString.Char8 as BC8
 import GHC.Generics (Generic)
@@ -95,7 +95,7 @@ instance ToJSON (MachineSpec PDA.PDA Text (Text, Text)) where
 
 
 data Output m a s = Output
-  { spec :: MachineSpec m a s
+  { spec :: !(MachineSpec m a s)
   , sentences :: ![Text]
   } deriving Generic
 

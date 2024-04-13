@@ -81,13 +81,34 @@ dropr i s = fst $ splitAtR i s
 --------------------------------------------------
 -- * Machine Definition
 
-generateLs :: forall m a s. (Machine m a s, Ord (L m a s), MatchAny (L m a s))
+-- | Generate valid strings (DFS version). Deprecated?
+generateLsDFS :: forall m a s. (Machine m a s, Ord (L m a s), MatchAny (L m a s))
+  => Int -- depth limit
+  -> [(L m a s, R m a s)] -- transition relation
+  -> (S m a s -> Bool) -- halting function
+  -> [a] -- input symbols
+  -> S m a s -- initial state
+  -> [[L m a s]] -- lazy list of valid strings up to the specified depth
+generateLsDFS maxDepth transitions hlt syms initState = dfs initState Empty 0
+  where
+    dfs :: S m a s -> Seq (L m a s) -> Int -> [[L m a s]]
+    dfs state acc depth
+      | depth > maxDepth = []
+      | hlt state = [toList acc]
+      | otherwise = concatMap explore syms
+      where
+        explore a =
+          let ls = filter (\(l, _) -> matchAny l (mkL a state)) transitions
+          in concatMap (\(l, r) -> dfs (action r state) (acc |> l) (depth + 1)) ls
+
+-- | Generate valid strings (BFS version). Deprecated?
+generateLsBFS :: forall m a s. (Machine m a s, Ord (L m a s), MatchAny (L m a s))
   => [(L m a s, R m a s)] -- transition relation
   -> (S m a s -> Bool) -- halting function
   -> [a] -- input symbols
   -> S m a s -- initial state
   -> [[L m a s]] -- lazy list of valid prefixes
-generateLs transitions hlt syms initState = bfs [(initState, Empty)]
+generateLsBFS transitions hlt syms initState = bfs [(initState, Empty)]
   where
     bfs :: [(S m a s, Seq (L m a s))] -> [[L m a s]]
     bfs [] = []
@@ -103,6 +124,44 @@ generateLs transitions hlt syms initState = bfs [(initState, Empty)]
           haltingAccs = [toList acc | hlt state]
         in
           haltingAccs ++ bfs newQueue
+
+-- | Generate valid strings (Iterated Depth DFS)
+generateLsIDDFS :: forall m a s. (Machine m a s, Ord (L m a s), MatchAny (L m a s))
+  => [(L m a s, R m a s)] -- transition relation
+  -> (S m a s -> Bool) -- halting function
+  -> [a] -- input symbols
+  -> S m a s -- initial state
+  -> [[L m a s]] -- lazy list of valid strings up to the specified depth
+generateLsIDDFS transitions hlt syms initState = idfs [(initState, Empty)] 1
+  where
+    idfs :: [(S m a s, Seq (L m a s))] -> Int -> [[L m a s]]
+    idfs queue depth =
+        let (haltingAccs, nonHaltingStates) = partitionHalting queue
+            newQueue = concatMap exploreStates nonHaltingStates
+        in haltingAccs ++ idfs newQueue (depth + 1)
+
+    partitionHalting :: [(S m a s, Seq (L m a s))] -> ([[L m a s]], [(S m a s, Seq (L m a s))])
+    partitionHalting = foldr f ([], [])
+      where
+        f (state, acc) (halting, nonHalting)
+          | hlt state = (toList acc : halting, nonHalting)
+          | otherwise = (halting, (state, acc) : nonHalting)
+
+    exploreStates :: (S m a s, Seq (L m a s)) -> [(S m a s, Seq (L m a s))]
+    exploreStates (state, acc) = concatMap explore syms
+      where
+        explore a =
+          let ls = filter (\(l, _) -> matchAny l (mkL a state)) transitions
+          in map (\(l, r) -> (action r state, acc |> l)) ls
+
+-- | Pick which strategy you ant.
+generateLs :: forall m a s. (Machine m a s, Ord (L m a s), MatchAny (L m a s))
+  => [(L m a s, R m a s)] -- transition relation
+  -> (S m a s -> Bool) -- halting function
+  -> [a] -- input symbols
+  -> S m a s -- initial state
+  -> [[L m a s]] -- lazy list of valid strings up to the specified depth
+generateLs = generateLsIDDFS
 
 class
   (ToJSON (L m a s),
