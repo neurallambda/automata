@@ -54,6 +54,7 @@ library
         bytestring,
         vector,
         text,
+        pqueue,
         aeson
 
     hs-source-dirs:   src

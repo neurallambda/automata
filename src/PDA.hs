@@ -30,27 +30,36 @@ Pushdown Automaton (PDA): 7-tuple (Q, Σ, Γ, δ, q₀, Z₀, F), where:
 
 module PDA where
 
-import Automata (generateLsIDDFS, Machine(..), viewl, generateLsDFS)
+import Automata (generateLsIDDFS, Machine(..), viewl, generateLsDFS, Exit, generateLsPQ)
 import Data.Sequence ( Seq, (<|), Seq(..) )
 import qualified Data.Sequence as Seq
 import Data.List.Extra (Any(..), MatchAny(..))
 import Data.Maybe (mapMaybe)
 import Data.Aeson
+    ( Value(Array, String),
+      ToJSON(toJSON),
+      FromJSON(parseJSON),
+      withArray )
 import Data.Aeson.Types (Parser)
 import qualified Data.Vector as Vector
 import qualified Data.Text as T
+import Automata (Exit(..))
+
+pqscore :: Seq (L PDA Symbol (State, Stack)) -> S PDA Symbol (State, Stack) -> Float
+pqscore xs state = fromIntegral $ Seq.length xs
 
 pdaString ::
   Int  -- max string length
   -> Int -- max steps to deepen before giving up
   -> [(L PDA Symbol (State, Stack), R PDA Symbol (State, Stack))]
-  -> (S PDA Symbol (State, Stack) -> Bool) -- halting states
+  -> (S PDA Symbol (State, Stack) -> Exit) -- halting states
   -> [Symbol] -- input symbols (to possibly stand in for Any)
   -> S PDA Symbol (State, Stack) -- initial state
   -> [T.Text]
 pdaString maxLen maxDeepening transitions haltStates syms initState =
   map T.concat
-    $ mapMaybe (mapM f) (generateLsIDDFS maxLen maxDeepening transitions haltStates syms initState)
+    $ mapMaybe (mapM f) (generateLsPQ maxLen pqscore transitions haltStates syms initState)
+    --  $ mapMaybe (mapM f) (generateLsIDDFS maxLen maxDeepening transitions haltStates syms initState)
     --  $ mapMaybe (mapM f) (generateLsDFS maxDeepening transitions haltStates syms initState)
   where
     f (PDAL (A a) _ _) = Just a
@@ -150,7 +159,7 @@ type Symbol = T.Text
 initialState :: S PDA Symbol (State, Stack)
 initialState = PDAS "INITIAL" Seq.empty
 
-halt :: S PDA a (State, stack) -> Bool
-halt (PDAS "REJECT" _) = True
-halt (PDAS "ACCEPT" _) = True
-halt _ = False
+halt :: S PDA a (State, stack) -> Exit
+halt (PDAS "REJECT" _) = Error
+halt (PDAS "ACCEPT" _) = Success
+halt _ = Running

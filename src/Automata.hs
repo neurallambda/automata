@@ -49,11 +49,11 @@ import qualified Data.Sequence as Seq
 import Data.Foldable ( toList, foldl' )
 import Data.Kind (Type)
 import Data.List.Extra (lookupMatchAny, MatchAny(..), Any (..))
-import Data.Aeson
+import Data.Aeson ( Value, ToJSON, FromJSON(parseJSON) )
 import Data.Aeson.Types (Parser)
 import qualified Data.Vector as Vector
 import Control.Arrow (second)
-
+import qualified Data.PQueue.Min as Q
 
 --------------------------------------------------
 -- * Util
@@ -81,11 +81,17 @@ dropr i s = fst $ splitAtR i s
 --------------------------------------------------
 -- * Machine Definition
 
+data Exit =
+  Running
+  | Error
+  | Success
+  deriving (Eq, Show)
+
 -- | Generate valid strings (DFS version). Deprecated?
 generateLsDFS :: forall m a s. (Machine m a s, Ord (L m a s), MatchAny (L m a s))
   => Int -- depth limit
   -> [(L m a s, R m a s)] -- transition relation
-  -> (S m a s -> Bool) -- halting function
+  -> (S m a s -> Exit) -- halting function
   -> [a] -- input symbols
   -> S m a s -- initial state
   -> [[L m a s]] -- lazy list of valid strings up to the specified depth
@@ -94,7 +100,8 @@ generateLsDFS maxDepth transitions hlt syms initState = dfs initState Empty 0
     dfs :: S m a s -> Seq (L m a s) -> Int -> [[L m a s]]
     dfs state acc depth
       | depth > maxDepth = []
-      | hlt state = [toList acc]
+      | hlt state == Success = [toList acc]
+      | hlt state == Error = []
       | otherwise = concatMap explore syms
       where
         explore a =
@@ -104,7 +111,7 @@ generateLsDFS maxDepth transitions hlt syms initState = dfs initState Empty 0
 -- | Generate valid strings (BFS version). Deprecated?
 generateLsBFS :: forall m a s. (Machine m a s, Ord (L m a s), MatchAny (L m a s))
   => [(L m a s, R m a s)] -- transition relation
-  -> (S m a s -> Bool) -- halting function
+  -> (S m a s -> Exit) -- halting function
   -> [a] -- input symbols
   -> S m a s -- initial state
   -> [[L m a s]] -- lazy list of valid prefixes
@@ -121,7 +128,7 @@ generateLsBFS transitions hlt syms initState = bfs [(initState, Empty)]
           -- add new states and their accumulators to the queue
           newQueue = queue ++ validTransitions
           -- check if the current state is a halting state
-          haltingAccs = [toList acc | hlt state]
+          haltingAccs = [toList acc | hlt state == Success]
         in
           haltingAccs ++ bfs newQueue
 
@@ -133,7 +140,7 @@ generateLsIDDFS :: forall m a s. (Machine m a s, Ord (L m a s), MatchAny (L m a 
   => Int -- maximum string length
   -> Int -- maximum deepening steps without finding new strings
   -> [(L m a s, R m a s)] -- transition relation
-  -> (S m a s -> Bool) -- halting function
+  -> (S m a s -> Exit) -- halting function
   -> [a] -- input symbols
   -> S m a s -- initial state
   -> [[L m a s]] -- lazy list of valid strings up to the specified depth
@@ -153,7 +160,8 @@ generateLsIDDFS maxLength maxDeepening transitions hlt syms initState = idfs [(i
     partitionHalting = foldr f ([], [])
       where
         f (state, acc, len) (halting, nonHalting)
-          | hlt state = ((acc, len) : halting, nonHalting)
+          | hlt state == Success = ((acc, len) : halting, nonHalting)
+          | hlt state == Error = (halting, nonHalting)
           | otherwise = (halting, (state, acc, len) : nonHalting)
 
     exploreStates :: (S m a s, Seq (L m a s), Int) -> [(S m a s, Seq (L m a s), Int)]
@@ -162,6 +170,53 @@ generateLsIDDFS maxLength maxDeepening transitions hlt syms initState = idfs [(i
         explore a =
           let ls = filter (\(l, _) -> matchAny l (mkL a state)) transitions
           in map (\(l, r) -> (action r state, acc |> l, len + 1)) ls
+
+
+
+data Scored a s = Scored !Float !a !s
+
+instance Eq (Scored a s) where
+  (Scored x _ _) == (Scored y _ _) = x == y
+
+instance Ord (Scored a s) where
+  (Scored x _ _) < (Scored y _ _) = x < y
+  (Scored x _ _) <= (Scored y _ _) = x <= y
+  (Scored x _ _) > (Scored y _ _) = x > y
+  (Scored x _ _) >= (Scored y _ _) = x >= y
+
+-- | Generate valid strings (Priority Queue).
+generateLsPQ :: forall m a s. (Machine m a s, Ord (L m a s), MatchAny (L m a s))
+  => Int -- maximum string length
+  -> (Seq (L m a s) -> S m a s -> Float) -- scoring function
+  -> [(L m a s, R m a s)] -- transition relation
+  -> (S m a s -> Exit) -- halting function
+  -> [a] -- input symbols
+  -> S m a s -- initial state
+  -> [[L m a s]] -- lazy list of valid strings
+generateLsPQ maxLength score transitions hlt syms initState = pq initQueue
+  where
+    initQueue = Q.singleton (Scored (score Empty initState) Empty initState)
+
+    pq :: Q.MinQueue (Scored (Seq (L m a s)) (S m a s)) -> [[L m a s]]
+    pq queue = case Q.minView queue of
+      Nothing -> []
+      Just (Scored _ acc state, queue')
+        | length acc > maxLength -> pq queue'
+        | hlt state == Success -> toList acc : pq queue'
+        | hlt state == Error -> pq queue'
+        | otherwise ->
+          let newStates = concatMap (exploreState acc state) syms
+              newQueue = foldl' (flip Q.insert) queue' newStates
+          in pq newQueue
+
+    exploreState :: Seq (L m a s) -> S m a s -> a -> [Scored (Seq (L m a s)) (S m a s)]
+    exploreState acc state sym =
+      let ls = filter (\(l, _) -> matchAny l (mkL sym state)) transitions
+      in map (\(l, r) ->
+            let newState = action r state
+                newAcc = acc |> l
+            in Scored (score newAcc newState) newAcc newState
+          ) ls
 
 class
   (ToJSON (L m a s),
