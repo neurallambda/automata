@@ -25,7 +25,9 @@ import Data.Aeson (FromJSON(..), ToJSON(..), encode, eitherDecodeStrict', withTe
 import qualified Data.ByteString.Char8 as BC8
 import GHC.Generics (Generic)
 import Data.Text (Text)
+import qualified Data.Text as T
 import PDA
+import QA
 
 data CLIOptions = CLIOptions
   { inputFile :: !FilePath
@@ -76,22 +78,17 @@ cliOptions = info (options <**> helper)
         <> help "Max number of depths to explore if no new strings have been yielded for this span.")
 
 data MachineType =
-  FSM
-  | PDA
-  | TM
+  FSM -- Finite State Machine
+  | PDA -- Pushdown Automaton
+  | QA -- Queue Automaton
   deriving (Show, Eq, Generic, ToJSON)
 
 instance FromJSON MachineType where
   parseJSON = withText "MachineType" $ \t ->
-    case t of
-      "FSM" -> return FSM
+    case T.toLower t of
       "fsm" -> return FSM
-
-      "PDA" -> return PDA
       "pda" -> return PDA
-
-      "TM" -> return TM
-      "tm" -> return TM
+      "qa" -> return QA
 
       _ -> fail "Invalid machine value"
 
@@ -123,8 +120,12 @@ main = do
   case (eitherDecodeStrict' @(MachineSpec PDA Text (Text, Text))) jsonInput of
     Left err -> putStrLn $ "Error parsing machine specification: " ++ err
     Right machineSpec -> do
+
       let spec@MachineSpec{..} = machineSpec
-      strings <- PDA.pdaString maxStringLength maxDeepening numGenerations rules PDA.halt symbols PDA.initialState
+      strings <- case machine of
+        PDA -> PDA.pdaString maxStringLength maxDeepening numGenerations rules PDA.halt symbols PDA.initialState
+        QA -> QA.qaString maxStringLength maxDeepening numGenerations rules QA.halt symbols QA.initialState
+
       let out = Output spec strings
 
       -- Save the generated data
