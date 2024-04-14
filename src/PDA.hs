@@ -46,17 +46,17 @@ import qualified Data.Text as T
 import Automata (Exit(..))
 import qualified Data.Set as Set
 
-pqscore :: Seq (L PDA Symbol (State, Stack)) -> S PDA Symbol (State, Stack) -> Float
+pqscore :: Seq (L PDA Symbol StateType) -> S PDA Symbol StateType -> Float
 pqscore xs state = fromIntegral $ Seq.length xs
 
 pdaString ::
   Int  -- max string length
   -> Int -- max steps to deepen before giving up
   -> Int -- number of strings to return
-  -> [(L PDA Symbol (State, Stack), R PDA Symbol (State, Stack))]
-  -> (S PDA Symbol (State, Stack) -> Exit) -- halting states
+  -> [(L PDA Symbol StateType, R PDA Symbol StateType)]
+  -> (S PDA Symbol StateType -> Exit) -- halting states
   -> [Symbol] -- input symbols (to possibly stand in for Any)
-  -> S PDA Symbol (State, Stack) -- initial state
+  -> S PDA Symbol StateType -- initial state
   -> IO [T.Text]
 pdaString maxLen maxDeepening nStrings transitions haltStates syms initState = do
   let f (PDAL (A a) _ _) = Just a
@@ -157,14 +157,15 @@ parseAction v = pushParser v
         String "push" -> Push <$> arr `parseAt` 1
         _ -> fail "Invalid push action"
 
-type State = T.Text
+type Q = T.Text
 type Stack = T.Text
 type Symbol = T.Text
+type StateType = (Q, Stack)
 
-initialState :: S PDA Symbol (State, Stack)
+initialState :: S PDA Symbol StateType
 initialState = PDAS "INITIAL" Seq.empty
 
-halt :: S PDA a (State, stack) -> Exit
+halt :: S PDA a (Q, stack) -> Exit
 halt (PDAS "REJECT" _) = Error
 halt (PDAS "ACCEPT" _) = Success
 halt _ = Running

@@ -14,6 +14,7 @@ dist/build/automata/automata --input rules/anbn.json --output anbn_progs.json --
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE MonoLocalBinds #-}
 
 module Main where
 
@@ -21,13 +22,18 @@ import Options.Applicative
 
 import qualified Data.ByteString.Char8 as B8
 
-import Data.Aeson (FromJSON(..), ToJSON(..), encode, eitherDecodeStrict', withText)
+import Data.Aeson (FromJSON(..), ToJSON(..), encode, eitherDecodeStrict', withText, (.:))
 import qualified Data.ByteString.Char8 as BC8
 import GHC.Generics (Generic)
 import Data.Text (Text)
 import qualified Data.Text as T
-import PDA
-import QA
+import qualified Automata as A
+import qualified FSM
+import qualified PDA
+import qualified QA
+import Data.Kind (Type)
+import qualified Data.Aeson.Types as Aeson
+
 
 data CLIOptions = CLIOptions
   { inputFile :: !FilePath
@@ -89,18 +95,43 @@ instance FromJSON MachineType where
       "fsm" -> return FSM
       "pda" -> return PDA
       "qa" -> return QA
-
       _ -> fail "Invalid machine value"
+
+-- Singleton types allow us to determine how to parse the JSON according to what
+-- type we should expect
+data SingMachineType :: Type -> Type -> Type -> Type where
+  SFSM :: SingMachineType FSM.FSM FSM.Symbol FSM.State
+  SPDA :: SingMachineType PDA.PDA PDA.Symbol PDA.StateType
+  SQA :: SingMachineType QA.QA QA.Symbol QA.State
+
+-- First pass of parsing pulls out the machine type so we know how to parse the rest
+newtype PartialMachineSpec = PartialMachineSpec
+  { pMachine :: MachineType
+  } deriving (Generic)
+
+instance FromJSON PartialMachineSpec where
+  parseJSON = Aeson.withObject "PartialMachineSpec" $ \v -> do
+    machineType <- v .: "machine"
+    return PartialMachineSpec
+      { pMachine = machineType
+      }
 
 
 data MachineSpec m a s = MachineSpec
   { machine :: !MachineType
   , symbols :: ![Text]
-  , rules :: ![(L m a s, R m a s)]
+  , rules :: ![(A.L m a s, A.R m a s)]
   } deriving Generic
 
-instance FromJSON (MachineSpec PDA.PDA Text (Text, Text)) where
-instance ToJSON (MachineSpec PDA.PDA Text (Text, Text)) where
+
+instance FromJSON (MachineSpec FSM.FSM FSM.Symbol FSM.State) where
+instance ToJSON (MachineSpec FSM.FSM FSM.Symbol FSM.State) where
+
+instance FromJSON (MachineSpec PDA.PDA PDA.Symbol PDA.StateType) where
+instance ToJSON (MachineSpec PDA.PDA PDA.Symbol PDA.StateType) where
+
+instance FromJSON (MachineSpec QA.QA QA.Symbol QA.State) where
+instance ToJSON (MachineSpec QA.QA QA.Symbol QA.State) where
 
 
 data Output m a s = Output
@@ -108,37 +139,54 @@ data Output m a s = Output
   , sentences :: ![Text]
   } deriving Generic
 
-instance ToJSON (Output PDA.PDA Text (Text, Text)) where
+instance ToJSON (Output FSM.FSM FSM.Symbol FSM.State) where
+instance ToJSON (Output PDA.PDA PDA.Symbol PDA.StateType) where
+instance ToJSON (Output QA.QA QA.Symbol QA.State) where
 
+parseMachineSpec :: SingMachineType m a b -> B8.ByteString -> Either String (MachineSpec m a b)
+parseMachineSpec SFSM jsonInput = eitherDecodeStrict' jsonInput
+parseMachineSpec SPDA jsonInput = eitherDecodeStrict' jsonInput
+parseMachineSpec SQA jsonInput = eitherDecodeStrict' jsonInput
 
 main :: IO ()
 main = do
-  CLIOptions{..} <- execParser cliOptions
+  clio@CLIOptions{..} <- execParser cliOptions
 
   -- Read transition table from input file
   jsonInput <- B8.readFile inputFile
-  case (eitherDecodeStrict' @(MachineSpec PDA Text (Text, Text))) jsonInput of
-    Left err -> putStrLn $ "Error parsing machine specification: " ++ err
-    Right machineSpec -> do
+  case eitherDecodeStrict' @PartialMachineSpec jsonInput of
+    Left err -> putStrLn $ "Error parsing partial machine specification: " ++ err
+    Right PartialMachineSpec{..} -> do
+      case pMachine of
 
-      let spec@MachineSpec{..} = machineSpec
-      strings <- case machine of
-        PDA -> PDA.pdaString maxStringLength maxDeepening numGenerations rules PDA.halt symbols PDA.initialState
-        QA -> QA.qaString maxStringLength maxDeepening numGenerations rules QA.halt symbols QA.initialState
+        PDA -> do
+          case parseMachineSpec SPDA jsonInput of
+            Left err -> putStrLn $ "Error parsing PDA machine specification: " ++ err
+            Right spec@MachineSpec{..} -> do
+              strings <- PDA.pdaString maxStringLength maxDeepening numGenerations rules PDA.halt symbols PDA.initialState
+              processOutput clio spec strings
 
-      let out = Output spec strings
+        QA -> case parseMachineSpec SQA jsonInput of
+            Left err -> putStrLn $ "Error parsing QA machine specification: " ++ err
+            Right spec@MachineSpec{..} -> do
+              strings <- QA.qaString maxStringLength maxDeepening numGenerations rules QA.halt symbols QA.initialState
+              processOutput clio spec strings
 
-      -- Save the generated data
-      if null strings
-        then
-          putStrLn "WARNING: No programs generated, perhaps you have an error in your transition rules?"
-        else do
-          BC8.writeFile outputFile $ BC8.toStrict (encode out)
-          putStrLn "sample:"
-          let hd = take 5 strings
-              tl = drop (length strings - 5) strings
-          mapM_ print hd
-          putStrLn "..."
-          mapM_ print tl
-          putStrLn $ "generated " <> show (length strings) <> " total programs"
-          putStrLn $ "saved to: " ++ outputFile
+processOutput :: ToJSON (Output m a s) => CLIOptions -> MachineSpec m a s -> [Text] -> IO ()
+processOutput CLIOptions{..} spec strings = do
+  let out = Output spec strings
+
+  -- Save the generated data
+  if null strings
+    then
+      putStrLn "WARNING: No programs generated, perhaps you have an error in your transition rules?"
+    else do
+      BC8.writeFile outputFile $ BC8.toStrict (encode out)
+      putStrLn "sample:"
+      let hd = take 5 strings
+          tl = drop (length strings - 5) strings
+      mapM_ print hd
+      putStrLn "..."
+      mapM_ print tl
+      putStrLn $ "generated " <> show (length strings) <> " total programs"
+      putStrLn $ "saved to: " ++ outputFile
