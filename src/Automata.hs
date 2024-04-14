@@ -54,6 +54,10 @@ import Data.Aeson.Types (Parser)
 import qualified Data.Vector as Vector
 import Control.Arrow (second)
 import qualified Data.PQueue.Min as Q
+import System.Random (randomRIO, randomRs, newStdGen)
+import Control.Monad (replicateM)
+import Data.List (nub)
+
 
 --------------------------------------------------
 -- * Util
@@ -217,6 +221,88 @@ generateLsPQ maxLength score transitions hlt syms initState = pq initQueue
                 newAcc = acc |> l
             in Scored (score newAcc newState) newAcc newState
           ) ls
+
+-- | Generate valid strings (Randomized).
+generateLsRandom :: forall m a s. (Machine m a s, Ord (L m a s), MatchAny (L m a s))
+  => Int -- maximum string length
+  -> Int -- number of strings to generate
+  -> [(L m a s, R m a s)] -- transition relation
+  -> (S m a s -> Exit) -- halting function
+  -> [a] -- input symbols
+  -> S m a s -- initial state
+  -> IO [[L m a s]] -- IO action that returns a list of valid strings
+generateLsRandom maxLength numStrings transitions hlt syms initState = do
+  strings <- replicateM numStrings $ randomWalk initState Empty 0
+  return $ filter (not . null) strings
+  where
+    randomWalk :: S m a s -> Seq (L m a s) -> Int -> IO [L m a s]
+    randomWalk state acc len
+      | len > maxLength = return []
+      | hlt state == Success = return (toList acc)
+      | hlt state == Error = return []
+      | otherwise = do
+        let validTransitions = concatMap (\a ->
+              let ls = filter (\(l, _) -> matchAny l (mkL a state)) transitions
+              in map (\(l, r) -> (action r state, acc |> l)) ls
+              ) syms
+        if null validTransitions
+          then return []
+          else do
+            index <- randomRIO (0, length validTransitions - 1)
+            let (newState, newAcc) = validTransitions !! index
+            randomWalk newState newAcc (len + 1)
+
+-- | Randomized Iterative Deepening
+generateLsRandomizedID :: forall m a s. (Machine m a s, Ord (L m a s), MatchAny (L m a s))
+  => Int -- maximum string length
+  -> Int -- number of strings to generate
+  -> Float -- randomization factor (between 0 and 1)
+  -> [(L m a s, R m a s)] -- transition relation
+  -> (S m a s -> Exit) -- halting function
+  -> [a] -- input symbols
+  -> S m a s -- initial state
+  -> IO [[L m a s]] -- IO action that returns a list of valid strings
+generateLsRandomizedID maxLength numStrings randomFactor transitions hlt syms initState = do
+  strings <- iterativeDeepening 0
+  return $ take numStrings strings
+  where
+    iterativeDeepening :: Int -> IO [[L m a s]]
+    iterativeDeepening depth
+      | depth > maxLength = return []
+      | otherwise = do
+        currentStrings <- randomizedDFS depth initState Empty
+        nextStrings <- iterativeDeepening (depth + 1)
+        return (currentStrings ++ nextStrings)
+
+    randomizedDFS :: Int -> S m a s -> Seq (L m a s) -> IO [[L m a s]]
+    randomizedDFS depth state acc
+      | depth == 0 = return []
+      | hlt state == Success = return [toList acc]
+      | hlt state == Error = return []
+      | otherwise = do
+        let transitions' = concatMap (\a ->
+              let ls = filter (\(l, _) -> matchAny l (mkL a state)) transitions
+              in map (\(l, r) -> (action r state, acc |> l)) ls
+              ) syms
+        if null transitions'
+          then return []
+          else do
+            let numTransitions = length transitions'
+            numToExplore <- randomRIO (1, ceiling (fromIntegral numTransitions * randomFactor))
+            transitionsToExplore <- getRandomTransitions numToExplore transitions'
+            concat <$> mapM (\(newState, newAcc) -> randomizedDFS (depth - 1) newState newAcc) transitionsToExplore
+
+    getRandomTransitions :: Int -> [(S m a s, Seq (L m a s))] -> IO [(S m a s, Seq (L m a s))]
+    getRandomTransitions n transitions' = do
+      indices <- getRandomIndices n (length transitions')
+      return $ map (transitions' !!) indices
+
+    getRandomIndices :: Int -> Int -> IO [Int]
+    getRandomIndices n max' = take n . nub . randomRs (0, max' - 1) <$> newStdGen
+
+
+--------------------------------------------------
+-- * Class
 
 class
   (ToJSON (L m a s),

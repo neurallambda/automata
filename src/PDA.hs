@@ -30,7 +30,7 @@ Pushdown Automaton (PDA): 7-tuple (Q, Σ, Γ, δ, q₀, Z₀, F), where:
 
 module PDA where
 
-import Automata (generateLsIDDFS, Machine(..), viewl, generateLsDFS, Exit, generateLsPQ)
+import Automata (generateLsIDDFS, Machine(..), viewl, generateLsDFS, Exit, generateLsPQ, generateLsRandom, generateLsRandomizedID)
 import Data.Sequence ( Seq, (<|), Seq(..) )
 import qualified Data.Sequence as Seq
 import Data.List.Extra (Any(..), MatchAny(..))
@@ -44,6 +44,7 @@ import Data.Aeson.Types (Parser)
 import qualified Data.Vector as Vector
 import qualified Data.Text as T
 import Automata (Exit(..))
+import qualified Data.Set as Set
 
 pqscore :: Seq (L PDA Symbol (State, Stack)) -> S PDA Symbol (State, Stack) -> Float
 pqscore xs state = fromIntegral $ Seq.length xs
@@ -51,19 +52,23 @@ pqscore xs state = fromIntegral $ Seq.length xs
 pdaString ::
   Int  -- max string length
   -> Int -- max steps to deepen before giving up
+  -> Int -- number of strings to return
   -> [(L PDA Symbol (State, Stack), R PDA Symbol (State, Stack))]
   -> (S PDA Symbol (State, Stack) -> Exit) -- halting states
   -> [Symbol] -- input symbols (to possibly stand in for Any)
   -> S PDA Symbol (State, Stack) -- initial state
-  -> [T.Text]
-pdaString maxLen maxDeepening transitions haltStates syms initState =
-  map T.concat
-    $ mapMaybe (mapM f) (generateLsPQ maxLen pqscore transitions haltStates syms initState)
-    --  $ mapMaybe (mapM f) (generateLsIDDFS maxLen maxDeepening transitions haltStates syms initState)
-    --  $ mapMaybe (mapM f) (generateLsDFS maxDeepening transitions haltStates syms initState)
-  where
-    f (PDAL (A a) _ _) = Just a
-    f (PDAL Any _ _) = Nothing
+  -> IO [T.Text]
+pdaString maxLen maxDeepening nStrings transitions haltStates syms initState = do
+  let f (PDAL (A a) _ _) = Just a
+      f (PDAL Any _ _) = Nothing
+  let randomFactor = 0.02  -- for randomizedID how many of possible branches to explore
+  strs <- generateLsRandomizedID maxLen nStrings randomFactor transitions haltStates syms initState
+  -- strs <- generateLsRandom maxLen nStrings transitions haltStates syms initState
+  -- strs <- pure . take nStrings $ generateLsPQ maxLen pqscore transitions haltStates syms initState
+  -- strs <- pure . take nStrings $ generateLsIDDFS maxLen maxDeepening transitions haltStates syms initState
+  -- strs <- pure . take nStrings $ generateLsDFS maxDeepening transitions haltStates syms initState
+  pure . Set.toList . Set.fromList $ map T.concat $ mapMaybe (mapM f) strs
+
 
 data PDA
 

@@ -124,8 +124,8 @@ main = do
     Left err -> putStrLn $ "Error parsing machine specification: " ++ err
     Right machineSpec -> do
       let spec@MachineSpec{..} = machineSpec
-          strings = take numGenerations $ PDA.pdaString maxStringLength maxDeepening rules PDA.halt symbols PDA.initialState
-          out = Output spec strings
+      strings <- PDA.pdaString maxStringLength maxDeepening numGenerations rules PDA.halt symbols PDA.initialState
+      let out = Output spec strings
 
       -- Save the generated data
       if null strings
