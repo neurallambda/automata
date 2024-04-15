@@ -61,9 +61,9 @@ pdaString ::
 pdaString maxLen maxDeepening nStrings transitions haltStates syms initState = do
   let f (PDAL (A a) _ _) = Just a
       f (PDAL Any _ _) = Nothing
-  let randomFactor = 0.02  -- for randomizedID how many of possible branches to explore
-  strs <- generateLsRandomizedID maxLen nStrings randomFactor transitions haltStates syms initState
-  -- strs <- generateLsRandom maxLen nStrings transitions haltStates syms initState
+  -- let randomFactor = 0.02  -- for randomizedID how many of possible branches to explore
+  -- strs <- generateLsRandomizedID maxLen nStrings randomFactor transitions haltStates syms initState
+  strs <- generateLsRandom maxLen nStrings transitions haltStates syms initState
   -- strs <- pure . take nStrings $ generateLsPQ maxLen pqscore transitions haltStates syms initState
   -- strs <- pure . take nStrings $ generateLsIDDFS maxLen maxDeepening transitions haltStates syms initState
   -- strs <- pure . take nStrings $ generateLsDFS maxDeepening transitions haltStates syms initState

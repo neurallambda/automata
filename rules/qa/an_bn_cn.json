@@ -1,6 +1,6 @@
 {
     "machine": "QA",
-    "description": "QA recognizable grammar `a^nb^n",
+    "description": "Queue Automata recognizable grammar `a^nb^n",
     "symbols": ["^", "a", "b", "c", "$", ""],
     "rules": [
         [["^", "INITIAL", null], ["Q1", "NULLOP"]],
