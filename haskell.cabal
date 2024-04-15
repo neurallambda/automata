@@ -44,7 +44,9 @@ library
     exposed-modules:
       Data.List.Extra,
       Automata,
-      PDA
+      FSM,
+      PDA,
+      QA
 
     build-depends:
         base ^>=4.17.2.1,

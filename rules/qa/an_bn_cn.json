@@ -1,0 +1,22 @@
+{
+    "machine": "QA",
+    "description": "Queue Automata recognizable grammar `a^nb^n",
+    "symbols": ["^", "a", "b", "c", "$", ""],
+    "rules": [
+        [["^", "INITIAL", null], ["Q1", "NULLOP"]],
+
+        [["a", "Q1", "ANY"], ["Q1", ["ENQR", "A"]]],
+
+        [["b", "Q1", "A"], ["START_B", "DEQL"]],
+        [["", "START_B", "ANY"], ["Q2", ["ENQR", "#"]]],
+        [["b", "Q2", "A"], ["CONT_B", "DEQL"]],
+        [["", "CONT_B", "ANY"], ["Q2", ["ENQR", "B"]]],
+
+        [["c", "Q2", "#"], ["START_C", "DEQL"]],
+        [["", "START_C", "ANY"], ["Q3", ["ENQR", "#"]]],
+        [["c", "Q3", "B"], ["Q3", "DEQL"]],
+
+        [["$", "Q3", "#"], ["ACCEPT", "NULLOP"]],
+        [["$", "Q3", null], ["ACCEPT", "NULLOP"]]
+    ]
+}

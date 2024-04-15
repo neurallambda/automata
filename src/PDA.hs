@@ -13,14 +13,14 @@ ACCEPT
 REJECT
 
 
-Pushdown Automaton (PDA): 7-tuple (Q, Σ, Γ, δ, q₀, Z₀, F), where:
-- Q : states
+Pushdown Automaton (PDA): 7-tuple (State, Σ, Γ, δ, q₀, Z₀, F), where:
+- State : states
 - Σ : input symbols
 - Γ : stack symbols (the stack alphabet)
-- δ : Q × (Σ ∪ {ε}) × Γ → P(Q × Γ*) is the transition function
-- q₀ ∈ Q
+- δ : State × (Σ ∪ {ε}) × Γ → P(State × Γ*) is the transition function
+- q₀ ∈ State
 - Z₀ ∈ Γ is the initial stack symbol
-- F ⊆ Q is the set of accepting/final states
+- F ⊆ State is the set of accepting/final states
 
 -}
 
@@ -46,24 +46,24 @@ import qualified Data.Text as T
 import Automata (Exit(..))
 import qualified Data.Set as Set
 
-pqscore :: Seq (L PDA Symbol (State, Stack)) -> S PDA Symbol (State, Stack) -> Float
+pqscore :: Seq (L PDA Symbol Frame) -> S PDA Symbol Frame -> Float
 pqscore xs state = fromIntegral $ Seq.length xs
 
 pdaString ::
   Int  -- max string length
   -> Int -- max steps to deepen before giving up
   -> Int -- number of strings to return
-  -> [(L PDA Symbol (State, Stack), R PDA Symbol (State, Stack))]
-  -> (S PDA Symbol (State, Stack) -> Exit) -- halting states
+  -> [(L PDA Symbol Frame, R PDA Symbol Frame)]
+  -> (S PDA Symbol Frame -> Exit) -- halting states
   -> [Symbol] -- input symbols (to possibly stand in for Any)
-  -> S PDA Symbol (State, Stack) -- initial state
+  -> S PDA Symbol Frame -- initial state
   -> IO [T.Text]
 pdaString maxLen maxDeepening nStrings transitions haltStates syms initState = do
   let f (PDAL (A a) _ _) = Just a
       f (PDAL Any _ _) = Nothing
-  let randomFactor = 0.02  -- for randomizedID how many of possible branches to explore
-  strs <- generateLsRandomizedID maxLen nStrings randomFactor transitions haltStates syms initState
-  -- strs <- generateLsRandom maxLen nStrings transitions haltStates syms initState
+  -- let randomFactor = 0.02  -- for randomizedID how many of possible branches to explore
+  -- strs <- generateLsRandomizedID maxLen nStrings randomFactor transitions haltStates syms initState
+  strs <- generateLsRandom maxLen nStrings transitions haltStates syms initState
   -- strs <- pure . take nStrings $ generateLsPQ maxLen pqscore transitions haltStates syms initState
   -- strs <- pure . take nStrings $ generateLsIDDFS maxLen maxDeepening transitions haltStates syms initState
   -- strs <- pure . take nStrings $ generateLsDFS maxDeepening transitions haltStates syms initState
@@ -160,8 +160,9 @@ parseAction v = pushParser v
 type State = T.Text
 type Stack = T.Text
 type Symbol = T.Text
+type Frame = (State, Stack)
 
-initialState :: S PDA Symbol (State, Stack)
+initialState :: S PDA Symbol Frame
 initialState = PDAS "INITIAL" Seq.empty
 
 halt :: S PDA a (State, stack) -> Exit

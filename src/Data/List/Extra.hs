@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleInstances #-}
+--  {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Data.List.Extra where
@@ -45,7 +45,9 @@ instance (MatchAny a, MatchAny b) => MatchAny (a, b) where
 instance (MatchAny a, MatchAny b, MatchAny c) => MatchAny (a, b, c) where
     matchAny (a1, b1, c1) (a2, b2, c2) = matchAny a1 a2 && matchAny b1 b2 && matchAny c1 c2
 
-instance (MatchAny a) => MatchAny (Maybe a) where
+instance (Eq a) => MatchAny (Maybe (Any a)) where
+    matchAny _ (Just Any) = True
+    matchAny (Just Any) _  = True
     matchAny (Just a) (Just b) = matchAny a b
     matchAny Nothing Nothing = True
     matchAny _ _ = False
