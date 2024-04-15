@@ -13,14 +13,14 @@ ACCEPT
 REJECT
 
 
-Pushdown Automaton (PDA): 7-tuple (Q, Σ, Γ, δ, q₀, Z₀, F), where:
-- Q : states
+Pushdown Automaton (PDA): 7-tuple (State, Σ, Γ, δ, q₀, Z₀, F), where:
+- State : states
 - Σ : input symbols
 - Γ : stack symbols (the stack alphabet)
-- δ : Q × (Σ ∪ {ε}) × Γ → P(Q × Γ*) is the transition function
-- q₀ ∈ Q
+- δ : State × (Σ ∪ {ε}) × Γ → P(State × Γ*) is the transition function
+- q₀ ∈ State
 - Z₀ ∈ Γ is the initial stack symbol
-- F ⊆ Q is the set of accepting/final states
+- F ⊆ State is the set of accepting/final states
 
 -}
 
@@ -46,17 +46,17 @@ import qualified Data.Text as T
 import Automata (Exit(..))
 import qualified Data.Set as Set
 
-pqscore :: Seq (L PDA Symbol StateType) -> S PDA Symbol StateType -> Float
+pqscore :: Seq (L PDA Symbol Frame) -> S PDA Symbol Frame -> Float
 pqscore xs state = fromIntegral $ Seq.length xs
 
 pdaString ::
   Int  -- max string length
   -> Int -- max steps to deepen before giving up
   -> Int -- number of strings to return
-  -> [(L PDA Symbol StateType, R PDA Symbol StateType)]
-  -> (S PDA Symbol StateType -> Exit) -- halting states
+  -> [(L PDA Symbol Frame, R PDA Symbol Frame)]
+  -> (S PDA Symbol Frame -> Exit) -- halting states
   -> [Symbol] -- input symbols (to possibly stand in for Any)
-  -> S PDA Symbol StateType -- initial state
+  -> S PDA Symbol Frame -- initial state
   -> IO [T.Text]
 pdaString maxLen maxDeepening nStrings transitions haltStates syms initState = do
   let f (PDAL (A a) _ _) = Just a
@@ -157,15 +157,15 @@ parseAction v = pushParser v
         String "push" -> Push <$> arr `parseAt` 1
         _ -> fail "Invalid push action"
 
-type Q = T.Text
+type State = T.Text
 type Stack = T.Text
 type Symbol = T.Text
-type StateType = (Q, Stack)
+type Frame = (State, Stack)
 
-initialState :: S PDA Symbol StateType
+initialState :: S PDA Symbol Frame
 initialState = PDAS "INITIAL" Seq.empty
 
-halt :: S PDA a (Q, stack) -> Exit
+halt :: S PDA a (State, stack) -> Exit
 halt (PDAS "REJECT" _) = Error
 halt (PDAS "ACCEPT" _) = Success
 halt _ = Running

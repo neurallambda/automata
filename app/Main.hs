@@ -2,19 +2,18 @@
 
 USAGE:
 
-cabal run automata -- --input rules/anbn.json --output data/anbn_progs.json --number 100 --max_string_length 100
+cabal run automata -- --input rules/anbn.json --output data/anbn_progs.json --number 100 --max_length 100
 
 # or
 
 cabal build
-dist/build/automata/automata --input rules/anbn.json --output anbn_progs.json --number 1000 --max_string_length 100
+dist/build/automata/automata --input rules/anbn.json --output anbn_progs.json --number 1000 --max_length 100
 
 -}
 
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE MonoLocalBinds #-}
 
 module Main where
 
@@ -31,7 +30,6 @@ import qualified Automata as A
 import qualified FSM
 import qualified PDA
 import qualified QA
-import Data.Kind (Type)
 import qualified Data.Aeson.Types as Aeson
 
 
@@ -97,13 +95,6 @@ instance FromJSON MachineType where
       "qa" -> return QA
       _ -> fail "Invalid machine value"
 
--- Singleton types allow us to determine how to parse the JSON according to what
--- type we should expect
-data SingMachineType :: Type -> Type -> Type -> Type where
-  SFSM :: SingMachineType FSM.FSM FSM.Symbol FSM.State
-  SPDA :: SingMachineType PDA.PDA PDA.Symbol PDA.StateType
-  SQA :: SingMachineType QA.QA QA.Symbol QA.State
-
 -- First pass of parsing pulls out the machine type so we know how to parse the rest
 newtype PartialMachineSpec = PartialMachineSpec
   { pMachine :: MachineType
@@ -116,7 +107,6 @@ instance FromJSON PartialMachineSpec where
       { pMachine = machineType
       }
 
-
 data MachineSpec m a s = MachineSpec
   { machine :: !MachineType
   , symbols :: ![Text]
@@ -127,11 +117,11 @@ data MachineSpec m a s = MachineSpec
 instance FromJSON (MachineSpec FSM.FSM FSM.Symbol FSM.State) where
 instance ToJSON (MachineSpec FSM.FSM FSM.Symbol FSM.State) where
 
-instance FromJSON (MachineSpec PDA.PDA PDA.Symbol PDA.StateType) where
-instance ToJSON (MachineSpec PDA.PDA PDA.Symbol PDA.StateType) where
+instance FromJSON (MachineSpec PDA.PDA PDA.Symbol PDA.Frame) where
+instance ToJSON (MachineSpec PDA.PDA PDA.Symbol PDA.Frame) where
 
-instance FromJSON (MachineSpec QA.QA QA.Symbol QA.State) where
-instance ToJSON (MachineSpec QA.QA QA.Symbol QA.State) where
+instance FromJSON (MachineSpec QA.QA QA.Symbol QA.Frame) where
+instance ToJSON (MachineSpec QA.QA QA.Symbol QA.Frame) where
 
 
 data Output m a s = Output
@@ -140,13 +130,8 @@ data Output m a s = Output
   } deriving Generic
 
 instance ToJSON (Output FSM.FSM FSM.Symbol FSM.State) where
-instance ToJSON (Output PDA.PDA PDA.Symbol PDA.StateType) where
-instance ToJSON (Output QA.QA QA.Symbol QA.State) where
-
-parseMachineSpec :: SingMachineType m a b -> B8.ByteString -> Either String (MachineSpec m a b)
-parseMachineSpec SFSM jsonInput = eitherDecodeStrict' jsonInput
-parseMachineSpec SPDA jsonInput = eitherDecodeStrict' jsonInput
-parseMachineSpec SQA jsonInput = eitherDecodeStrict' jsonInput
+instance ToJSON (Output PDA.PDA PDA.Symbol PDA.Frame) where
+instance ToJSON (Output QA.QA QA.Symbol QA.Frame) where
 
 main :: IO ()
 main = do
@@ -155,18 +140,24 @@ main = do
   -- Read transition table from input file
   jsonInput <- B8.readFile inputFile
   case eitherDecodeStrict' @PartialMachineSpec jsonInput of
-    Left err -> putStrLn $ "Error parsing partial machine specification: " ++ err
+    Left err -> putStrLn $ "Error parsing `machine` key: " ++ err
     Right PartialMachineSpec{..} -> do
       case pMachine of
+        FSM -> do
+          case eitherDecodeStrict' jsonInput of
+            Left err -> putStrLn $ "Error parsing FSM machine specification: " ++ err
+            Right spec@MachineSpec{..} -> do
+              strings <- FSM.fsmString maxStringLength maxDeepening numGenerations rules FSM.halt symbols FSM.initialState
+              processOutput clio spec strings
 
         PDA -> do
-          case parseMachineSpec SPDA jsonInput of
+          case eitherDecodeStrict' jsonInput of
             Left err -> putStrLn $ "Error parsing PDA machine specification: " ++ err
             Right spec@MachineSpec{..} -> do
               strings <- PDA.pdaString maxStringLength maxDeepening numGenerations rules PDA.halt symbols PDA.initialState
               processOutput clio spec strings
 
-        QA -> case parseMachineSpec SQA jsonInput of
+        QA -> case eitherDecodeStrict' jsonInput of
             Left err -> putStrLn $ "Error parsing QA machine specification: " ++ err
             Right spec@MachineSpec{..} -> do
               strings <- QA.qaString maxStringLength maxDeepening numGenerations rules QA.halt symbols QA.initialState

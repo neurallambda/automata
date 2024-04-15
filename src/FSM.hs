@@ -17,6 +17,7 @@ import qualified Data.Vector as Vector
 import qualified Data.Text as T
 import Automata (Exit(..))
 import qualified Data.Set as Set
+import Data.Text (Text)
 
 fsmscore :: [L FSM Symbol State] -> S FSM Symbol State -> Float
 fsmscore xs state = fromIntegral $ length xs
@@ -93,7 +94,7 @@ type Symbol = T.Text
 initialState :: S FSM Symbol State
 initialState = FSMS "INITIAL"
 
-halt :: S FSM a String -> Exit
+halt :: S FSM a Text -> Exit
 halt (FSMS "REJECT") = Error
 halt (FSMS "ACCEPT") = Success
 halt _ = Running
