@@ -1,4 +1,12 @@
 # Automata
+<a href="https://x.com/neurallambda">
+  <img src="https://raster.shields.io/badge/follow-@neurallambda-blue.png?logo=x&color=BD2C00&labelColor=474240" alt="Follow on X" height="20">
+</a>
+&nbsp;&nbsp;
+<a href="https://discord.gg/HRrPTQn2Uf">
+  <img src="https://raster.shields.io/badge/discord-neurallambda-blue.png?logo=discord&logoColor=ffffff&color=BD2C00&labelColor=474240" alt="Join Discord" height="20">
+</a>
+</br></br>
 
 A tool for generating synthetic data that results from grammars writen for various automata (eg Finite State Machines, Pushdown Automata and Turing Machines). Grammars are saved as `json`, and you can build 1000 valid strings that match this grammar with:
 
