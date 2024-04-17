@@ -1,0 +1,27 @@
+{
+    "machine": "PDA",
+    "description": "PDA recognizable grammar for palindromes separated by '|' using the entire lowercase alphabet",
+    "symbols": ["^", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "|", "$"],
+    "rules": [
+        [["^", "INITIAL", null], ["Q1", ["push", "$"]]],
+
+        [["$", "Q2", "$"], ["ACCEPT", "pop"]],
+
+        [["f", "Q1", "ANY"], ["Q1", ["push", "f"]]],
+        [["g", "Q1", "ANY"], ["Q1", ["push", "g"]]],
+        [["h", "Q1", "ANY"], ["Q1", ["push", "h"]]],
+        [["i", "Q1", "ANY"], ["Q1", ["push", "i"]]],
+        [["j", "Q1", "ANY"], ["Q1", ["push", "j"]]],
+
+        [["|", "Q1", "ANY"], ["Q2", "nullop"]],
+
+        [["f", "Q2", "f"], ["Q2", "pop"]],
+        [["g", "Q2", "g"], ["Q2", "pop"]],
+        [["h", "Q2", "h"], ["Q2", "pop"]],
+        [["i", "Q2", "i"], ["Q2", "pop"]],
+        [["j", "Q2", "j"], ["Q2", "pop"]]
+
+
+
+    ]
+}
