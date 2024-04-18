@@ -10,7 +10,7 @@ from datasets import Dataset, DatasetDict, concatenate_datasets
 import random
 
 N_SWAPS = 2
-MAX_LENGTH = 40  # max sentence length (after each char has been separated with space)
+MAX_LENGTH = 30  # max sentence length (after each char has been separated with space)
 HF_TOKEN = os.getenv('HF_TOKEN')
 
 train_path = os.path.expanduser("~/_/neurallambda-automata/data/palindrome_progs.json")
@@ -76,6 +76,16 @@ dataset_dict = dataset_dict.map(lambda x: {'length': len(x['text'])})
 dataset_dict = dataset_dict.sort('length')
 dataset_dict = dataset_dict.remove_columns('length')
 
+# Sample
+print(f"Examples from Training: {len(dataset_dict['train'])} total rows")
+for example in dataset_dict['train']['text'][:5] + dataset_dict['train']['text'][-5:]:
+    print(example)
+
+print(f"Examples from Testing: {len(dataset_dict['test'])}")
+for example in dataset_dict['test']['text'][:5] + dataset_dict['test']['text'][-5:]:
+    print(example)
+
+
 # save the dataset to disk
 dataset_dict.save_to_disk('palindrome_dataset')
 
@@ -88,11 +98,3 @@ if HF_TOKEN is not None:
         print('permission denied')
 else:
     print('HF_TOKEN not found in env, skipping pushing to hub')
-
-print("Examples from Training:")
-for example in dataset_dict['train']['text'][:5] + dataset_dict['train']['text'][-5:]:
-    print(example)
-
-print("Examples from Testing:")
-for example in dataset_dict['test']['text'][:5] + dataset_dict['test']['text'][-5:]:
-    print(example)
