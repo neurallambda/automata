@@ -10,8 +10,11 @@ from datasets import Dataset, DatasetDict, concatenate_datasets
 import random
 
 N_SWAPS = 2
-MAX_LENGTH = 30  # max sentence length (after each char has been separated with space)
+MAX_LENGTH = 25  # max sentence length (after each char has been separated with space)
 HF_TOKEN = os.getenv('HF_TOKEN')
+
+TRAIN_N = 5000 # truncate datasets
+TEST_N = 100 # truncate datasets
 
 train_path = os.path.expanduser("~/_/neurallambda-automata/data/palindrome_progs.json")
 test_path = os.path.expanduser("~/_/neurallambda-automata/data/palindrome_2_progs.json")
@@ -67,6 +70,17 @@ dataset_dict = DatasetDict({
     'train': load_data(train_path),
     'test': load_data(test_path),
 })
+
+# truncate test set
+random_indices = random.sample(
+    range(len(dataset_dict['test'])),
+    min(TEST_N if TEST_N else float('inf'), len(dataset_dict['test'])))
+dataset_dict['test'] = dataset_dict['test'].select(random_indices)
+
+random_indices = random.sample(
+    range(len(dataset_dict['train'])),
+    min(TRAIN_N if TRAIN_N else float('inf'), len(dataset_dict['train'])))
+dataset_dict['train'] = dataset_dict['train'].select(random_indices)
 
 # randomize the order of examples in each split
 dataset_dict = dataset_dict.shuffle(seed=42)
